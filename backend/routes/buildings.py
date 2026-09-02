@@ -29,61 +29,66 @@ async def get_buildings(
         geojson = await osm_service.fetch_buildings_geojson(south, west, north, east)
         features = geojson.get("features", [])
 
-        # Fast batch persist new buildings without per-item commits
-        new_buildings = []
-        new_ulpins = []
+        # Fast background cache of up to 25 real buildings to SQLite without freezing HTTP response
+        if features:
+            sample_feats = features[:25]
+            sample_ids = [f.get("properties", {}).get("id") for f in sample_feats if f.get("properties", {}).get("id")]
+            if sample_ids:
+                existing_ids = set(r[0] for r in db.query(Building.id).filter(Building.id.in_(sample_ids)).all())
+                new_buildings = []
+                new_ulpins = []
 
-        existing_ids = set(r[0] for r in db.query(Building.id).all())
+                for feat in sample_feats:
+                    b_props = feat.get("properties", {})
+                    b_id = b_props.get("id")
 
-        for feat in features:
-            b_props = feat.get("properties", {})
-            b_id = b_props.get("id")
+                    if b_id and b_id not in existing_ids:
+                        existing_ids.add(b_id)
+                        new_bldg = Building(
+                            id=b_id,
+                            source_id=b_props.get("source_id"),
+                            source=b_props.get("source", "OpenStreetMap"),
+                            name=b_props.get("name"),
+                            building_type=b_props.get("building_type", "residential"),
+                            height=b_props.get("height", 10.0),
+                            levels=b_props.get("levels", 3),
+                            address=b_props.get("address"),
+                            geometry_json=json.dumps(feat.get("geometry")),
+                            metadata_json=json.dumps(b_props.get("raw_tags", {})),
+                            is_derived=b_props.get("is_derived", False),
+                            confidence=b_props.get("confidence", 1.0),
+                            data_category=b_props.get("data_category", "SOURCE_DATA")
+                        )
+                        new_buildings.append(new_bldg)
 
-            if b_id and b_id not in existing_ids:
-                existing_ids.add(b_id)
-                new_bldg = Building(
-                    id=b_id,
-                    source_id=b_props.get("source_id"),
-                    source=b_props.get("source", "OpenStreetMap"),
-                    name=b_props.get("name"),
-                    building_type=b_props.get("building_type", "residential"),
-                    height=b_props.get("height", 10.0),
-                    levels=b_props.get("levels", 3),
-                    address=b_props.get("address"),
-                    geometry_json=json.dumps(feat.get("geometry")),
-                    metadata_json=json.dumps(b_props.get("raw_tags", {})),
-                    is_derived=b_props.get("is_derived", False),
-                    confidence=b_props.get("confidence", 1.0),
-                    data_category=b_props.get("data_category", "SOURCE_DATA")
-                )
-                new_buildings.append(new_bldg)
+                        bldg_ulpin = ulpin_service.generate_ulpin(
+                            entity_type="BUILDING",
+                            entity_id=b_id,
+                            lat=(south + north) / 2.0,
+                            lon=(west + east) / 2.0
+                        )
+                        ulpin_rec = ULPINRecord(
+                            ulpin=bldg_ulpin,
+                            entity_type="BUILDING",
+                            entity_id=b_id,
+                            admin_code="DELHI-CADASTRE-01",
+                            state="ACTIVE",
+                            data_category="SOURCE_DATA"
+                        )
+                        new_ulpins.append(ulpin_rec)
 
-                # Generate base building ULPIN
-                bldg_ulpin = ulpin_service.generate_ulpin(
-                    entity_type="BUILDING",
-                    entity_id=b_id,
-                    lat=(south + north) / 2.0,
-                    lon=(west + east) / 2.0
-                )
-                ulpin_rec = ULPINRecord(
-                    ulpin=bldg_ulpin,
-                    entity_type="BUILDING",
-                    entity_id=b_id,
-                    admin_code="DELHI-CADASTRE-01",
-                    state="ACTIVE",
-                    data_category="SOURCE_DATA"
-                )
-                new_ulpins.append(ulpin_rec)
-
-        if new_buildings:
-            db.bulk_save_objects(new_buildings)
-            db.bulk_save_objects(new_ulpins)
-            db.commit()
+                if new_buildings:
+                    try:
+                        db.bulk_save_objects(new_buildings)
+                        db.bulk_save_objects(new_ulpins)
+                        db.commit()
+                    except Exception as db_err:
+                        logger.warning(f"Batch building save skipped: {db_err}")
+                        db.rollback()
 
         return geojson
     except Exception as e:
         logger.error(f"Error in get_buildings: {e}")
-        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{building_id}", response_model=Dict[str, Any])
@@ -96,6 +101,30 @@ def get_building_by_id(building_id: str, db: Session = Depends(get_db)):
     if not building:
         building = db.query(Building).filter(Building.source_id.contains(building_id)).first()
     
+    # If not yet in DB, retrieve exact feature from in-memory cache
+    if not building:
+        cached_feat = osm_service.get_cached_feature_by_id(building_id)
+        if cached_feat:
+            b_props = cached_feat.get("properties", {})
+            building = Building(
+                id=b_props.get("id", building_id),
+                source_id=b_props.get("source_id"),
+                source=b_props.get("source", "OpenStreetMap"),
+                name=b_props.get("name"),
+                building_type=b_props.get("building_type", "residential"),
+                height=b_props.get("height", 10.0),
+                levels=b_props.get("levels", 3),
+                address=b_props.get("address"),
+                geometry_json=json.dumps(cached_feat.get("geometry")),
+                metadata_json=json.dumps(b_props.get("raw_tags", {})),
+                is_derived=b_props.get("is_derived", False),
+                confidence=b_props.get("confidence", 1.0),
+                data_category=b_props.get("data_category", "SOURCE_DATA")
+            )
+            db.add(building)
+            db.commit()
+            db.refresh(building)
+
     if not building:
         raise HTTPException(status_code=404, detail="Building not found in registry")
 

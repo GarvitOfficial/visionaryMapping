@@ -2,7 +2,7 @@ import json
 import logging
 import asyncio
 import httpx
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 from shapely.geometry import Polygon, MultiPolygon, mapping
 from shapely.ops import unary_union
 
@@ -370,5 +370,14 @@ class OSMService:
                 bldg_idx += 1
 
         return features
+
+    def get_cached_feature_by_id(self, feature_id: str) -> Optional[Dict[str, Any]]:
+        for cache_val in self.cache.values():
+            for feat in cache_val.get("features", []):
+                fid = feat.get("id") or feat.get("properties", {}).get("id")
+                sid = feat.get("properties", {}).get("source_id")
+                if fid == feature_id or sid == feature_id or (sid and feature_id in sid):
+                    return feat
+        return None
 
 osm_service = OSMService()
