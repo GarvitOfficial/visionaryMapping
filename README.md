@@ -257,8 +257,8 @@ sih/
 
 ### Step 1: Clone the Repository
 ```bash
-git clone https://github.com/GarvitOfficial/ulpin-3d-cadastre.git
-cd "sih (1)/sih"
+git clone https://github.com/GarvitOfficial/visionaryMapping.git
+cd "visionaryMapping"
 ```
 
 ---
