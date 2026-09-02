@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy-bg: #070B14;
+  --navy-sidebar: #0B1120;
+  --navy-dark: #0F172A;
+  --navy-card: #131D31;
+  --navy-card-hover: #182642;
+  --navy-border: #1E2E4A;
+  --accent-cyan: #0EA5E9;
+  --accent-blue: #3B82F6;
+  --accent-emerald: #10B981;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--navy-bg);
+  color: #F8FAFC;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #0B1120;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E2E4A;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3B82F6;
+}
+
+/* Glassmorphism panel styling */
+.glass-panel {
+  background: rgba(19, 29, 49, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(30, 46, 74, 0.7);
+}
+
+.glass-panel-hover {
+  transition: all 0.2s ease-in-out;
+}
+.glass-panel-hover:hover {
+  background: rgba(24, 38, 66, 0.95);
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow: 0 8px 25px -5px rgba(14, 165, 233, 0.15);
+}
+
+/* Leaflet Map Styling */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background-color: #070B14 !important;
+  font-family: 'Inter', sans-serif !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: rgba(19, 29, 49, 0.95) !important;
+  backdrop-filter: blur(8px) !important;
+  color: #F8FAFC !important;
+  border: 1px solid rgba(56, 189, 248, 0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important;
+  padding: 4px !important;
+}
+
+.leaflet-popup-tip {
+  background: rgba(19, 29, 49, 0.95) !important;
+}
+
+/* Glow Utilities */
+.glow-cyan {
+  box-shadow: 0 0 15px rgba(14, 165, 233, 0.35);
+}
+.glow-emerald {
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.35);
+}
+.glow-purple {
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.35);
+}
+
+/* Custom Gradient Text */
+.gradient-text {
+  background: linear-gradient(135deg, #38BDF8 0%, #818CF8 50%, #C084FC 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
