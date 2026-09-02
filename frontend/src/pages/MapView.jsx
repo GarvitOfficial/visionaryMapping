@@ -88,7 +88,7 @@ export default function MapView({ currentLocation, onSelectBuilding, selectedBui
           signal: controller.signal
         });
 
-        if (res.data && res.data.features && Array.isArray(res.data.features)) {
+        if (res.data && res.data.features) {
           res.data.features.forEach(feat => {
             const fid = feat.id || feat.properties?.id;
             if (fid) {
@@ -104,14 +104,16 @@ export default function MapView({ currentLocation, onSelectBuilding, selectedBui
       } catch (err) {
         const isCanceled = axios.isCancel(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || err?.message === 'canceled';
         if (!isCanceled) {
-          console.error("Realtime OSM building fetch error:", err);
-          setErrorMsg("Syncing live OpenStreetMap buildings...");
-          setTimeout(() => setErrorMsg(null), 3000);
+          console.error("OSM building fetch error:", err);
+          if (featureStoreRef.current.size === 0) {
+            setErrorMsg("Connecting to building registry...");
+            setTimeout(() => setErrorMsg(null), 2500);
+          }
         }
       } finally {
         setLoading(false);
       }
-    }, 250);
+    }, 200);
   }, []);
 
   const handleSearch = async (e) => {
@@ -248,12 +250,30 @@ export default function MapView({ currentLocation, onSelectBuilding, selectedBui
 
   const filteredGeoJson = {
     ...geoJsonData,
-    features: (geoJsonData.features || []).filter(f => {
-      // Building Type Category Filter
+    features: geoJsonData.features.filter(f => {
+      // 1. Strict Screen Viewport Bounds Filter (ONLY buildings inside current screen bounds!)
+      if (currentBounds) {
+        const coords = f.geometry?.coordinates;
+        if (coords && coords.length > 0) {
+          let firstPt = coords[0];
+          while (Array.isArray(firstPt[0])) {
+            firstPt = firstPt[0];
+          }
+          const lon = firstPt[0];
+          const lat = firstPt[1];
+          const margin = 0.002; // Small buffer for boundary features
+          if (lat < (currentBounds.south - margin) || lat > (currentBounds.north + margin) ||
+              lon < (currentBounds.west - margin) || lon > (currentBounds.east + margin)) {
+            return false;
+          }
+        }
+      }
+
+      // 2. Building Type Category Filter
       const bType = (f.properties?.building_type || '').toLowerCase();
       const levels = f.properties?.levels || 4;
       if (buildingFilter === 'MONUMENTS') return bType === 'monument' || f.properties?.roof_shape === 'dome' || f.properties?.roof_shape === 'pyramid';
-      if (buildingFilter === 'TOWERS') return bType === 'tower' || levels >= 8 || bType === 'commercial' || bType === 'office';
+      if (buildingFilter === 'TOWERS') return bType === 'tower' || levels >= 8 || bType === 'commercial';
       if (buildingFilter === 'CIVIC') return bType === 'civic' || bType === 'public';
       if (buildingFilter === 'RESIDENTIAL') return bType === 'apartments' || bType === 'residential';
       return true;

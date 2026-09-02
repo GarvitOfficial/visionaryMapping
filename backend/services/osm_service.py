@@ -2,7 +2,7 @@ import json
 import logging
 import asyncio
 import httpx
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple
 from shapely.geometry import Polygon, MultiPolygon, mapping
 from shapely.ops import unary_union
 
@@ -11,15 +11,10 @@ logger = logging.getLogger("osm_service")
 # Fast public Overpass API mirrors
 OVERPASS_ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",
-    "https://lz4.overpass-api.de/api/interpreter",
-    "https://z.overpass-api.de/api/interpreter",
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.nchc.org.tw/api/interpreter"
 ]
-
-DEFAULT_HEADERS = {
-    "User-Agent": "3D-ULPIN-Cadastre/1.0 (https://cadastre.gov.in; contact@cadastre.gov.in)",
-    "Accept": "application/json"
-}
 
 class OSMService:
     def __init__(self):
@@ -43,7 +38,7 @@ class OSMService:
 
     async def _query_single_endpoint(self, client: httpx.AsyncClient, endpoint: str, overpass_query: str) -> Dict[str, Any]:
         try:
-            resp = await client.post(endpoint, data={"data": overpass_query}, headers=DEFAULT_HEADERS)
+            resp = await client.post(endpoint, data={"data": overpass_query})
             if resp.status_code == 200:
                 data = resp.json()
                 if data and "elements" in data and len(data["elements"]) > 0:
@@ -71,11 +66,16 @@ class OSMService:
             return self.cache[cache_key]
 
         overpass_query = f"""
-        [out:json][timeout:5];
+        [out:json][timeout:25];
         (
           way["building"]({south},{west},{north},{east});
           way["building:part"]({south},{west},{north},{east});
+          way["man_made"="tower"]({south},{west},{north},{east});
+          way["historic"]({south},{west},{north},{east});
+          way["amenity"]({south},{west},{north},{east});
+          way["tourism"]({south},{west},{north},{east});
           relation["building"]({south},{west},{north},{east});
+          relation["type"="multipolygon"]["building"]({south},{west},{north},{east});
         );
         out body;
         >;
@@ -84,7 +84,7 @@ class OSMService:
 
         data = None
         try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 tasks = [
                     asyncio.create_task(self._query_single_endpoint(client, ep, overpass_query))
                     for ep in OVERPASS_ENDPOINTS
@@ -370,14 +370,5 @@ class OSMService:
                 bldg_idx += 1
 
         return features
-
-    def get_cached_feature_by_id(self, feature_id: str) -> Optional[Dict[str, Any]]:
-        for cache_val in self.cache.values():
-            for feat in cache_val.get("features", []):
-                fid = feat.get("id") or feat.get("properties", {}).get("id")
-                sid = feat.get("properties", {}).get("source_id")
-                if fid == feature_id or sid == feature_id or (sid and feature_id in sid):
-                    return feat
-        return None
 
 osm_service = OSMService()

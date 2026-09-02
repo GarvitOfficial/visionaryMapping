@@ -24,7 +24,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -35,14 +35,6 @@ app.include_router(ulpins_router)
 app.include_router(topology_router)
 app.include_router(shadow_router)
 app.include_router(routes_utilities_router)
-
-@app.get("/")
-def root():
-    return {
-        "message": "3D ULPIN Cadastre API is running!",
-        "documentation": "/docs",
-        "health": "/api/health"
-    }
 
 @app.get("/api/health")
 def health_check():
