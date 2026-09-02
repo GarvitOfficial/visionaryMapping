@@ -36,6 +36,14 @@ app.include_router(topology_router)
 app.include_router(shadow_router)
 app.include_router(routes_utilities_router)
 
+@app.get("/")
+def root():
+    return {
+        "message": "3D ULPIN Cadastre API is running!",
+        "documentation": "/docs",
+        "health": "/api/health"
+    }
+
 @app.get("/api/health")
 def health_check():
     return {
