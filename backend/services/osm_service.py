@@ -11,10 +11,15 @@ logger = logging.getLogger("osm_service")
 # Fast public Overpass API mirrors
 OVERPASS_ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.nchc.org.tw/api/interpreter"
+    "https://lz4.overpass-api.de/api/interpreter",
+    "https://z.overpass-api.de/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
 ]
+
+DEFAULT_HEADERS = {
+    "User-Agent": "3D-ULPIN-Cadastre/1.0 (https://cadastre.gov.in; contact@cadastre.gov.in)",
+    "Accept": "application/json"
+}
 
 class OSMService:
     def __init__(self):
@@ -38,7 +43,7 @@ class OSMService:
 
     async def _query_single_endpoint(self, client: httpx.AsyncClient, endpoint: str, overpass_query: str) -> Dict[str, Any]:
         try:
-            resp = await client.post(endpoint, data={"data": overpass_query})
+            resp = await client.post(endpoint, data={"data": overpass_query}, headers=DEFAULT_HEADERS)
             if resp.status_code == 200:
                 data = resp.json()
                 if data and "elements" in data and len(data["elements"]) > 0:
@@ -66,16 +71,11 @@ class OSMService:
             return self.cache[cache_key]
 
         overpass_query = f"""
-        [out:json][timeout:25];
+        [out:json][timeout:5];
         (
           way["building"]({south},{west},{north},{east});
           way["building:part"]({south},{west},{north},{east});
-          way["man_made"="tower"]({south},{west},{north},{east});
-          way["historic"]({south},{west},{north},{east});
-          way["amenity"]({south},{west},{north},{east});
-          way["tourism"]({south},{west},{north},{east});
           relation["building"]({south},{west},{north},{east});
-          relation["type"="multipolygon"]["building"]({south},{west},{north},{east});
         );
         out body;
         >;
@@ -84,7 +84,7 @@ class OSMService:
 
         data = None
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=4.0) as client:
                 tasks = [
                     asyncio.create_task(self._query_single_endpoint(client, ep, overpass_query))
                     for ep in OVERPASS_ENDPOINTS
